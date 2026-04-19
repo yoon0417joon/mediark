@@ -43,7 +43,7 @@ brew install ffmpeg
 
 ```bash
 git clone https://github.com/yoon0417joon/mediark.git
-cd imgsearchengine
+cd mediark
 ```
 
 **Linux / macOS:**
