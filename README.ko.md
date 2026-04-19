@@ -42,7 +42,7 @@ brew install ffmpeg
 ### 2. 저장소 클론 및 설치
 
 ```bash
-git clone https://github.com/your-org/imgsearchengine.git
+git clone https://github.com/yoon0417joon/mediark.git
 cd imgsearchengine
 ```
 
