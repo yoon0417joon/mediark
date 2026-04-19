@@ -1,0 +1,5 @@
+# ── Linux (Ubuntu 22.04+) ────────────────────────────────────
+# PaddleOCR: CPU 전용 빌드 (CUDA 환경은 paddlepaddle-gpu 로 교체)
+-r requirements-base.txt
+paddlepaddle==2.6.2
+paddleocr==2.7.3

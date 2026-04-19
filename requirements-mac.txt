@@ -1,0 +1,4 @@
+# ── macOS (Apple Silicon / Intel) ───────────────────────────
+# EasyOCR: Apple Silicon 호환, PaddleOCR는 macOS에서 설치 불안정
+-r requirements-base.txt
+easyocr>=1.7.0

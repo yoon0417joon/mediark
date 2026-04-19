@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Gallery Search</title>
+  <link rel="stylesheet" href="/style.css">
+  <meta name="gallery-api-key" content="">
+</head>
+<body>
+
+<header id="header">
+  <div style="display:flex;align-items:center;justify-content:space-between;">
+    <h1>Gallery Search</h1>
+    <span id="status-bar"></span>
+  </div>
+
+  <div class="search-grid">
+    <div class="field">
+      <label for="q-ocr">OCR</label>
+      <input type="text" id="q-ocr" placeholder="텍스트 검색..." autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="q-wd14">WD14</label>
+      <input type="text" id="q-wd14" placeholder="태그 검색..." autocomplete="off">
+      <div class="dropdown" id="dd-wd14"></div>
+    </div>
+    <div class="field">
+      <label for="q-ram">RAM++</label>
+      <input type="text" id="q-ram" placeholder="태그 검색..." autocomplete="off">
+      <div class="dropdown" id="dd-ram"></div>
+    </div>
+    <div class="field">
+      <label for="q-stt">STT</label>
+      <input type="text" id="q-stt" placeholder="음성 검색..." autocomplete="off">
+    </div>
+  </div>
+
+  <div class="filter-row">
+    <button class="filter-pill active" data-type="">ALL</button>
+    <button class="filter-pill" data-type="image">IMG</button>
+    <button class="filter-pill" data-type="gif">GIF</button>
+    <button class="filter-pill" data-type="video">VIDEO</button>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" id="btn-search">검색</button>
+    <button class="btn" id="btn-shuffle">🔀 섞기</button>
+    <button class="btn" id="btn-clear">초기화</button>
+    <button class="btn" id="btn-upload">↑ 업로드</button>
+  </div>
+</header>
+
+<input type="file" id="file-input" multiple accept="image/jpeg,image/png,image/gif,image/webp,image/bmp,video/mp4,video/quicktime,video/x-msvideo,video/webm,video/x-matroska,.gif,.jpg,.jpeg,.png,.webp,.bmp,.mp4,.mov,.avi,.webm,.mkv" style="display:none">
+
+<div id="upload-modal" role="dialog" aria-modal="true">
+  <div id="upload-panel">
+    <h2>업로드</h2>
+    <div id="upload-filename">준비 중...</div>
+    <div id="upload-progress-bar-wrap">
+      <div id="upload-progress-bar"></div>
+    </div>
+    <div id="upload-counter"></div>
+    <div id="upload-log"></div>
+  </div>
+</div>
+
+<div id="grid-wrap">
+  <div id="loader">불러오는 중…</div>
+  <div id="empty">결과가 없습니다</div>
+  <div id="grid"></div>
+  <div id="pagination"></div>
+</div>
+
+<div id="info-modal" role="dialog" aria-modal="true">
+  <div id="info-panel">
+    <div id="info-media-wrap">
+      <div id="info-media"></div>
+      <div id="info-media-actions">
+        <button class="info-media-btn" id="info-btn-download">↓ 다운로드</button>
+        <button class="info-media-btn" id="info-btn-share">⬆ 링크 복사</button>
+      </div>
+    </div>
+    <div id="info-content">
+      <div id="info-header">
+        <h2>상세정보</h2>
+        <button id="info-close" aria-label="닫기">✕</button>
+      </div>
+      <div id="info-body">
+        <div class="info-section">
+          <h3>OCR 텍스트</h3>
+          <p id="info-ocr"></p>
+        </div>
+        <div class="info-section">
+          <h3>WD14 태그</h3>
+          <div id="info-wd14" class="tag-pills"></div>
+        </div>
+        <div class="info-section">
+          <h3>RAM++ 태그</h3>
+          <div id="info-ram" class="tag-pills"></div>
+        </div>
+        <div class="info-section" id="info-stt-section" style="display:none">
+          <h3>STT 텍스트</h3>
+          <p id="info-stt"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+  <script src="/app.js" defer></script>
+</body>
+</html>

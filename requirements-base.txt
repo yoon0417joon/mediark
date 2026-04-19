@@ -1,0 +1,17 @@
+# ── 공통 의존성 (모든 OS) ────────────────────────────────────
+fastapi>=0.110.0
+python-multipart>=0.0.9
+uvicorn[standard]>=0.29.0
+qdrant-client>=1.9.0
+transformers>=4.40.0
+accelerate>=0.30.0
+timm>=1.0.0
+huggingface_hub>=0.23.0
+fairscale>=0.4.0
+numpy<2.0
+sentence-transformers>=3.0.0
+Pillow>=10.0.0
+watchdog>=4.0.0
+openai-whisper>=20231117
+# recognize-anything (RAM++) — GitHub 설치
+# pip install git+https://github.com/xinyu1205/recognize-anything.git

@@ -1,0 +1,5 @@
+# ── Windows 10/11 ───────────────────────────────────────────
+# PaddleOCR: Windows CPU 전용 (oneDNN 버그로 3.x 불가 → 2.7.3 고정)
+-r requirements-base.txt
+paddlepaddle==2.6.2
+paddleocr==2.7.3

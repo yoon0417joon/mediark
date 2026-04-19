@@ -1,0 +1,60 @@
+# ── Python ──────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ── 환경변수 / 비밀 ──────────────────────────────────────────
+.env
+*.env.local
+
+# ── 데이터베이스 / 벡터 DB ───────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+qdrant_data/
+
+# ── 미디어 캐시 ──────────────────────────────────────────────
+thumbs/
+images_sample/
+
+# ── 내부 문서 (.md) — README*.md 만 공개, 나머지 제외 ───────
+*.md
+!README.md
+!README.ko.md
+!CONTRIBUTING.md
+
+# ── 로그 ─────────────────────────────────────────────────────
+*.log
+logs/
+*.log.*
+
+# ── 도구 캐시 / IDE ───────────────────────────────────────────
+.playwright-mcp/
+.mypy_cache/
+.ruff_cache/
+.claude/
+
+# ── OS / 에디터 ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── 테스트 / 커버리지 ────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── 모델 캐시 (용량 큼) ──────────────────────────────────────
+# HuggingFace 모델은 ~/.cache/huggingface 에 저장됨
+# 필요 시 프로젝트 내 캐시 폴더가 생기면 여기에 추가
+model_cache/

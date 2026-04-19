@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install lint tools
+        run: pip install ruff
+
+      - name: Install base dependencies (no heavy ML libs for CI)
+        run: |
+          pip install fastapi uvicorn qdrant-client sentence-transformers \
+                      Pillow watchdog numpy "numpy<2.0" pytest pytest-cov
+
+      - name: Lint with ruff
+        run: ruff check server/ tests/
+
+      - name: Run tests
+        env:
+          GALLERY_ROOT: /tmp/gallery_test
+          THUMB_DIR: /tmp/thumbs_test
+          SQLITE_PATH: /tmp/gallery_test.db
+          QDRANT_PATH: /tmp/qdrant_test
+        run: |
+          mkdir -p /tmp/gallery_test /tmp/thumbs_test
+          pytest tests/ -v --tb=short \
+            --ignore=tests/test_search.py \
+            -k "not ingest and not pipeline and not embed and not tagger and not ram and not audio"
