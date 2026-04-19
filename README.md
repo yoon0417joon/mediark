@@ -15,11 +15,13 @@ All processing runs **locally** — no cloud API required. Retrieval uses FTS5 k
 
 ## Supported Platforms
 
-| OS | Python | OCR backend |
-|----|--------|-------------|
-| Ubuntu 22.04+ | 3.10+ | PaddleOCR 2.7.3 |
-| macOS (Apple Silicon / Intel) | 3.10+ | EasyOCR |
-| Windows 10 / 11 | 3.10+ | PaddleOCR 2.7.3 |
+
+| OS                            | Python | OCR backend     |
+| ----------------------------- | ------ | --------------- |
+| Ubuntu 22.04+                 | 3.10+  | PaddleOCR 2.7.3 |
+| macOS (Apple Silicon / Intel) | 3.10+  | EasyOCR         |
+| Windows 10 / 11               | 3.10+  | PaddleOCR 2.7.3 |
+
 
 > **ffmpeg** must be installed separately for video processing and STT extraction.
 
@@ -47,11 +49,13 @@ cd mediark
 ```
 
 **Linux / macOS:**
+
 ```bash
 bash setup.sh
 ```
 
 **Windows:**
+
 ```bat
 setup.bat
 ```
@@ -69,12 +73,14 @@ GALLERY_ROOT=/path/to/your/images
 ### 4. Start the server
 
 **Linux / macOS:**
+
 ```bash
 source .venv/bin/activate
 uvicorn server.main:app --host 127.0.0.1 --port 8000
 ```
 
 **Windows:**
+
 ```bat
 .venv\Scripts\activate
 uvicorn server.main:app --host 127.0.0.1 --port 8000
@@ -94,30 +100,34 @@ Only new files are processed. Search is available immediately after.
 
 ## Indexing
 
-| Method | Description |
-|--------|-------------|
-| `pipeline full` | Index all new files (OCR + tagging + embedding) |
-| `pipeline ocr` | OCR / tags / thumbnails only |
-| `pipeline embed` | Embedding + Qdrant storage only |
-| `POST /ingest` | Trigger background indexing via API |
-| Watchdog | Auto-index when files are added to `GALLERY_ROOT` |
+
+| Method           | Description                                       |
+| ---------------- | ------------------------------------------------- |
+| `pipeline full`  | Index all new files (OCR + tagging + embedding)   |
+| `pipeline ocr`   | OCR / tags / thumbnails only                      |
+| `pipeline embed` | Embedding + Qdrant storage only                   |
+| `POST /ingest`   | Trigger background indexing via API               |
+| Watchdog         | Auto-index when files are added to `GALLERY_ROOT` |
+
 
 ---
 
 ## API Reference
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/search` | Search (`ocr_q`, `wd14_q`, `ram_q`, `stt_q`) |
-| `GET` | `/random` | Random media |
-| `GET` | `/media/{id}` | Download original file |
-| `GET` | `/thumb/{id}` | Thumbnail image |
-| `GET` | `/info/{id}` | Media metadata (OCR / tags) |
-| `POST` | `/upload` | Upload a file |
-| `POST` | `/ingest` | Trigger indexing pipeline |
-| `GET` | `/status` | Indexing progress |
-| `GET` | `/tags/suggest` | Tag autocomplete |
-| `GET` | `/watchdog/status` | File watcher status |
+
+| Method | Path               | Description                                  |
+| ------ | ------------------ | -------------------------------------------- |
+| `GET`  | `/search`          | Search (`ocr_q`, `wd14_q`, `ram_q`, `stt_q`) |
+| `GET`  | `/random`          | Random media                                 |
+| `GET`  | `/media/{id}`      | Download original file                       |
+| `GET`  | `/thumb/{id}`      | Thumbnail image                              |
+| `GET`  | `/info/{id}`       | Media metadata (OCR / tags)                  |
+| `POST` | `/upload`          | Upload a file                                |
+| `POST` | `/ingest`          | Trigger indexing pipeline                    |
+| `GET`  | `/status`          | Indexing progress                            |
+| `GET`  | `/tags/suggest`    | Tag autocomplete                             |
+| `GET`  | `/watchdog/status` | File watcher status                          |
+
 
 ---
 
@@ -125,13 +135,15 @@ Only new files are processed. Search is available immediately after.
 
 See `.env.example` for the full list. Commonly used:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GALLERY_ROOT` | `./images_sample` | Path to your media folder |
-| `API_KEY` | *(none)* | Set to enable API key authentication |
-| `QDRANT_URL` | *(none)* | External Qdrant server URL |
-| `OCR_BACKEND` | auto by OS | `paddleocr` or `easyocr` |
-| `STT_MODEL` | `base` | Whisper model size |
+
+| Variable       | Default           | Description                          |
+| -------------- | ----------------- | ------------------------------------ |
+| `GALLERY_ROOT` | `./images_sample` | Path to your media folder            |
+| `API_KEY`      | *(none)*          | Set to enable API key authentication |
+| `QDRANT_URL`   | *(none)*          | External Qdrant server URL           |
+| `OCR_BACKEND`  | auto by OS        | `paddleocr` or `easyocr`             |
+| `STT_MODEL`    | `base`            | Whisper model size                   |
+
 
 ---
 
@@ -162,16 +174,19 @@ imgsearchengine/
 ## Troubleshooting
 
 **Qdrant / SQLite consistency mismatch:**
+
 ```bash
 python -c "from server.db.sqlite import init_db; from server.ingest.pipeline import repair_qdrant_consistency; init_db(); repair_qdrant_consistency()"
 ```
 
 **Tag autocomplete returns nothing:**
+
 ```bash
 python -c "from server.db.sqlite import init_db, rebuild_tag_stats; init_db(); rebuild_tag_stats()"
 ```
 
 **RAM++ tags missing:**
+
 ```bash
 python -m server.ingest.repair_ram_tags
 ```
@@ -180,18 +195,18 @@ python -m server.ingest.repair_ram_tags
 
 ## Roadmap
 
-- [ ] Duplicate detection — SHA-256 exact-match upload rejection; bulk backfill for existing gallery
-- [ ] Multi-user auth — JWT login, viewer / uploader / moderator / admin roles, invite-code signup
-- [ ] Per-user search settings — vector vs. exact match, partial vs. exact tag, AND / OR keyword logic
-- [ ] User & server management — admin panel, server profile (visibility, allowed formats), multi-server client presets
-- [ ] Content moderation — report queue, hide / delete actions, granular moderator permissions
-- [ ] Storage quota — LRU auto-eviction weighted by access score; Pin to protect files
-- [ ] Extended formats — audio (mp3 / wav / flac / m4a), PDF, EPUB ingestion
-- [ ] Plugin pipeline — per-stage ON/OFF toggle (OCR / WD14 / RAM++ / STT), ingest scheduling, selective reprocess
-- [ ] Tag management — aliases, parent-child hierarchy, per-media editing, range-slider numeric search
-- [ ] Reverse image search, similarity dedup (pHash + vector), and smart collections
-- [ ] Full plugin ecosystem (11 categories) + admin dashboard
-- [ ] Themes, federated search, and large-scale performance optimisation *(long-term)*
+- Duplicate detection — SHA-256 exact-match upload rejection; bulk backfill for existing gallery
+- Multi-user auth — JWT login, viewer / uploader / moderator / admin roles, invite-code signup
+- Per-user search settings — vector vs. exact match, partial vs. exact tag, AND / OR keyword logic
+- User & server management — admin panel, server profile (visibility, allowed formats), multi-server client presets
+- Content moderation — report queue, hide / delete actions, granular moderator permissions
+- Storage quota — LRU auto-eviction weighted by access score; Pin to protect files
+- Extended formats — audio (mp3 / wav / flac / m4a), PDF, EPUB ingestion
+- Plugin pipeline — per-stage ON/OFF toggle (OCR / WD14 / RAM++ / STT), ingest scheduling, selective reprocess
+- Tag management — aliases, parent-child hierarchy, per-media editing, range-slider numeric search
+- Reverse image search, similarity dedup (pHash + vector), and smart collections
+- Full plugin ecosystem (11 categories) + admin dashboard
+- Themes, federated search, and large-scale performance optimisation *(long-term)*
 
 ---
 
