@@ -1,60 +1,60 @@
 @echo off
-REM Gallery Search System — Windows 10/11 설치 스크립트
+REM Gallery Search System — Windows 10/11 setup script
 setlocal enabledelayedexpansion
 
-echo === Gallery Search — 설치 시작 (Windows) ===
+echo === Gallery Search — setup (Windows) ===
 
-REM ── 1. Python 확인 ──────────────────────────────────────────
+REM ── 1. Python ───────────────────────────────────────────────
 where python >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [오류] Python 이 설치되어 있지 않습니다.
-    echo        https://www.python.org/downloads/ 에서 3.10 이상을 설치하세요.
+    echo [ERROR] Python is not installed.
+    echo         Install 3.10+ from https://www.python.org/downloads/
     exit /b 1
 )
 python -c "import sys; v=sys.version_info; exit(0 if v.major==3 and v.minor>=10 else 1)" 2>nul
 if %errorlevel% neq 0 (
-    echo [경고] Python 3.10 이상을 권장합니다.
+    echo [WARN] Python 3.10 or newer is recommended.
 )
-echo [OK] Python 확인 완료
+echo [OK] Python is available
 
-REM ── 2. ffmpeg 확인 ──────────────────────────────────────────
+REM ── 2. ffmpeg ───────────────────────────────────────────────
 where ffmpeg >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [경고] ffmpeg 가 없습니다. 영상 처리 기능이 동작하지 않습니다.
-    echo        https://ffmpeg.org/download.html 에서 설치하고 PATH 에 추가하세요.
+    echo [WARN] ffmpeg not found. Video features will not work.
+    echo        Install from https://ffmpeg.org/download.html and add to PATH.
 )
 
-REM ── 3. 가상환경 생성 ─────────────────────────────────────────
+REM ── 3. Virtual environment ───────────────────────────────────
 if not exist ".venv" (
-    echo [설치] 가상환경 생성 중...
+    echo [SETUP] Creating virtual environment...
     python -m venv .venv
 )
 call .venv\Scripts\activate.bat
 
-REM ── 4. 의존성 설치 ──────────────────────────────────────────
-echo [설치] 공통 의존성 설치 중...
+REM ── 4. Dependencies ─────────────────────────────────────────
+echo [SETUP] Installing dependencies...
 python -m pip install --upgrade pip -q
-echo [설치] Windows — PaddleOCR 의존성 사용
+echo [SETUP] Windows — using PaddleOCR requirements
 python -m pip install -r requirements-windows.txt -q
 
-REM ── 5. RAM++ 설치 ────────────────────────────────────────────
-echo [설치] RAM++ (recognize-anything) 설치 중...
+REM ── 5. RAM++ ───────────────────────────────────────────────
+echo [SETUP] Installing RAM++ (recognize-anything)...
 python -m pip install "git+https://github.com/xinyu1205/recognize-anything.git" -q
 
-REM ── 6. .env 파일 초기화 ──────────────────────────────────────
+REM ── 6. .env ────────────────────────────────────────────────
 if not exist ".env" (
     copy .env.example .env >nul
-    echo [설정] .env 파일 생성됨 — 필요 시 편집하세요.
+    echo [CONFIG] Created .env — edit if needed.
 )
 
-REM ── 7. 디렉토리 생성 ─────────────────────────────────────────
+REM ── 7. Directories ─────────────────────────────────────────
 if not exist "images_sample" mkdir images_sample
 if not exist "thumbs" mkdir thumbs
 
 echo.
-echo === 설치 완료 ===
-echo 서버 실행:
+echo === Setup complete ===
+echo Run the server:
 echo   .venv\Scripts\activate
 echo   uvicorn server.main:app --host 127.0.0.1 --port 8000
 echo.
-echo 브라우저: http://localhost:8000
+echo Open: http://localhost:8000

@@ -10,38 +10,40 @@ dist/
 *.egg-info/
 .eggs/
 
-# ── 환경변수 / 비밀 ──────────────────────────────────────────
+# ── Secrets / env ─────────────────────────────────────────────
 .env
 *.env.local
 
-# ── 데이터베이스 / 벡터 DB ───────────────────────────────────
+# ── Database / vector store ───────────────────────────────────
 *.db
+*.db-wal
+*.db-shm
 *.sqlite
 *.sqlite3
 qdrant_data/
 
-# ── 미디어 캐시 ──────────────────────────────────────────────
+# ── Media cache ───────────────────────────────────────────────
 thumbs/
 images_sample/
 
-# ── 내부 문서 (.md) — README*.md 만 공개, 나머지 제외 ───────
+# ── Internal docs (.md) — only README* + CONTRIBUTING tracked ─
 *.md
 !README.md
 !README.ko.md
 !CONTRIBUTING.md
 
-# ── 로그 ─────────────────────────────────────────────────────
+# ── Logs ──────────────────────────────────────────────────────
 *.log
 logs/
 *.log.*
 
-# ── 도구 캐시 / IDE ───────────────────────────────────────────
+# ── Tool / IDE caches ─────────────────────────────────────────
 .playwright-mcp/
 .mypy_cache/
 .ruff_cache/
 .claude/
 
-# ── OS / 에디터 ──────────────────────────────────────────────
+# ── OS / editor ───────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 .idea/
@@ -49,12 +51,12 @@ Thumbs.db
 *.swp
 *.swo
 
-# ── 테스트 / 커버리지 ────────────────────────────────────────
+# ── Tests / coverage ──────────────────────────────────────────
 .pytest_cache/
 .coverage
 htmlcov/
 
-# ── 모델 캐시 (용량 큼) ──────────────────────────────────────
-# HuggingFace 모델은 ~/.cache/huggingface 에 저장됨
-# 필요 시 프로젝트 내 캐시 폴더가 생기면 여기에 추가
+# ── Model cache (large) ───────────────────────────────────────
+# Hugging Face models use ~/.cache/huggingface by default.
+# Add project-local cache dirs here if you create any.
 model_cache/
