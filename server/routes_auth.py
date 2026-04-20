@@ -235,8 +235,10 @@ async def whoami(user: dict | None = Depends(current_user)) -> dict:
     """로그인 상태 확인용 — 비로그인 시 authenticated=false 반환(401 아님)."""
     if user is None:
         return {"authenticated": False}
+    is_anon = bool(user.get("is_anon"))
     return {
         "authenticated": True,
+        "is_anon": is_anon,
         "id":    user["id"],
         "email": user["email"],
         "role":  user["role"],

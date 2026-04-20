@@ -36,10 +36,13 @@ function logoutAndRedirect() {
 async function ensureSession() {
   const res = await fetch('/auth/whoami', fetchOpts({ headers: { ...authHeaders() } }));
   const data = await res.json().catch(() => ({}));
-  if (!data.authenticated) return false;
+  if (!data.authenticated) {
+    localStorage.removeItem('GALLERY_USER');
+    return false;
+  }
   localStorage.setItem(
     'GALLERY_USER',
-    JSON.stringify({ id: data.id, email: data.email, role: data.role })
+    JSON.stringify({ id: data.id, email: data.email, role: data.role, is_anon: !!data.is_anon })
   );
   return true;
 }
@@ -645,10 +648,19 @@ document.querySelectorAll('.filter-pill').forEach(pill => {
 // ── User strip + logout (Sprint 15) ───────────────────────────
 function renderUserStrip() {
   const u = currentUser();
-  if (!u) return;
   const bar = document.getElementById('status-bar');
   if (!bar || bar.dataset.userWired) return;
   bar.dataset.userWired = '1';
+
+  // 익명 또는 비로그인: "로그인" 링크만 표시
+  if (!u || u.is_anon) {
+    const a = document.createElement('a');
+    a.href = '/login.html';
+    a.textContent = '로그인';
+    a.className = 'user-link';
+    bar.appendChild(a);
+    return;
+  }
 
   const who = document.createElement('span');
   who.className = 'user-who';
