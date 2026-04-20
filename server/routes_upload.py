@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import (
     APIRouter,
     BackgroundTasks,
+    Depends,
     File,
     HTTPException,
     Request,
@@ -16,7 +17,9 @@ from fastapi import (
 )
 from starlette.concurrency import run_in_threadpool
 
+from server.auth.deps import require_role
 from server.config import (
+    DUPLICATE_POLICY,
     GIF_EXTENSIONS,
     GALLERY_ROOT,
     IMAGE_EXTENSIONS,
@@ -24,8 +27,9 @@ from server.config import (
     UPLOAD_RATE_LIMIT,
     VIDEO_EXTENSIONS,
 )
-from server.db.sqlite import get_media_by_id, insert_media
+from server.db.sqlite import get_media_by_hash, get_media_by_id, insert_media, update_file_hash
 from server.http_utils import client_ip
+from server.ingest.hashing import compute_sha256
 from server.ingest.scanner import classify_media_type
 from server.rate_limit import rate_limit_bucket
 from server.upload_tracking import mark_upload_done, mark_upload_start
@@ -33,6 +37,8 @@ from server.upload_tracking import mark_upload_done, mark_upload_start
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_require_uploader = require_role("uploader")
 
 _UPLOAD_ALLOWED = IMAGE_EXTENSIONS | GIF_EXTENSIONS | VIDEO_EXTENSIONS
 
@@ -136,6 +142,7 @@ async def upload_file(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
+    user: dict = Depends(_require_uploader),
 ) -> dict:
     rate_limit_bucket(client_ip(request), "upload", UPLOAD_RATE_LIMIT)
 
@@ -181,6 +188,32 @@ async def upload_file(
 
     filepath_normalized = str(dest_resolved).replace("\\", "/")
 
+    # ── 해시 기반 중복 감지 (Sprint 14A) ─────────────────────────────────────
+    file_hash = await run_in_threadpool(lambda: compute_sha256(str(dest_resolved)))
+    existing_by_hash = await run_in_threadpool(lambda: get_media_by_hash(file_hash))
+    warn_duplicate_id: int | None = None
+
+    if existing_by_hash is not None:
+        existing_id = int(existing_by_hash["id"])
+        if DUPLICATE_POLICY == "warn_only":
+            warn_duplicate_id = existing_id
+        else:
+            dest.unlink(missing_ok=True)
+            if DUPLICATE_POLICY == "auto_delete_new":
+                return {
+                    "status": "duplicate",
+                    "media_id": existing_id,
+                    "duplicate": True,
+                }
+            else:  # reject_only (기본)
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": "동일한 파일이 이미 존재합니다",
+                        "media_id": existing_id,
+                    },
+                )
+
     mark_upload_start(filepath_normalized)
 
     media_id = await run_in_threadpool(
@@ -191,6 +224,9 @@ async def upload_file(
         dest.unlink(missing_ok=True)
         raise HTTPException(status_code=409, detail="이미 존재하는 파일입니다")
 
+    # 해시 즉시 저장 — 백그라운드 처리 전에 중복 기준이 DB에 반영되어야 함
+    await run_in_threadpool(lambda: update_file_hash(media_id, file_hash))
+
     try:
         background_tasks.add_task(
             _ingest_uploaded_file, media_id, filepath_normalized, media_type
@@ -199,12 +235,16 @@ async def upload_file(
         mark_upload_done(filepath_normalized)
         raise
 
-    return {
+    response: dict = {
         "status": "accepted",
         "media_id": media_id,
         "filename": dest.name,
         "media_type": media_type,
     }
+    if warn_duplicate_id is not None:
+        response["duplicate_warning"] = True
+        response["existing_media_id"] = warn_duplicate_id
+    return response
 
 
 @router.get("/upload/status/{media_id}")

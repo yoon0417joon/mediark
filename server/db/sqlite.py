@@ -50,6 +50,20 @@ CREATE TABLE IF NOT EXISTS tag_stats (
 );
 """
 
+CREATE_MEDIA_REPORTS_TABLE = """
+CREATE TABLE IF NOT EXISTS media_reports (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    media_id     INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+    reporter_id  INTEGER REFERENCES users(id),
+    reason       TEXT,
+    status       TEXT NOT NULL DEFAULT 'pending',
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reviewed_by  INTEGER REFERENCES users(id),
+    reviewed_at  DATETIME,
+    notes        TEXT
+);
+"""
+
 # ── 커넥션 풀 (H18) ────────────────────────────────────────────────────────────
 
 _POOL_MAX = 16
@@ -208,6 +222,7 @@ def _migrate_indexes() -> None:
         "CREATE INDEX IF NOT EXISTS idx_media_media_type ON media(media_type)",
         "CREATE INDEX IF NOT EXISTS idx_media_thumb_indexed ON media(thumb_path, indexed_at)",
         "CREATE INDEX IF NOT EXISTS idx_media_indexed_at ON media(indexed_at)",
+        "CREATE INDEX IF NOT EXISTS idx_media_file_hash ON media(file_hash)",
     ]
     with connect() as conn:
         for s in stmts:
@@ -291,11 +306,19 @@ def init_db() -> None:
             ("ram_tags", "TEXT"),
             ("audio_text", "TEXT"),
             ("index_error", "TEXT"),
+            ("file_hash", "TEXT"),
+            ("hidden", "INTEGER NOT NULL DEFAULT 0"),
         ):
             _migrate_add_column(col, typ)
         _migrate_tag_stats()
         _migrate_indexes()
         _migrate_fts()
+        with connect() as conn:
+            conn.execute(CREATE_MEDIA_REPORTS_TABLE)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_media_reports_status "
+                "ON media_reports(status)"
+            )
         _INITIALIZED = True
         logger.info("[sqlite] init_db 완료: %s (fts=%s)", _sqlite_path(), _FTS_ENABLED)
 
@@ -367,6 +390,110 @@ def update_audio_text(media_id: int, audio_text: str | None) -> None:
 
 def update_index_error(media_id: int, err: str | None) -> None:
     _update_field("index_error", media_id, err)
+
+
+def update_file_hash(media_id: int, file_hash: str) -> None:
+    _update_field("file_hash", media_id, file_hash)
+
+
+def set_media_hidden(media_id: int, hidden: bool) -> bool:
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE media SET hidden = ? WHERE id = ?",
+            (1 if hidden else 0, media_id),
+        )
+        return (cur.rowcount or 0) > 0
+
+
+def is_media_hidden(media_id: int) -> bool:
+    row = get_media_by_id(media_id)
+    if row is None:
+        return False
+    try:
+        return int(row["hidden"] or 0) != 0
+    except (KeyError, IndexError):
+        return False
+
+
+def delete_media_row(media_id: int) -> sqlite3.Row | None:
+    """행 삭제 전 스냅샷 반환. 없으면 None."""
+    row = get_media_by_id(media_id)
+    if row is None:
+        return None
+    with connect() as conn:
+        conn.execute("DELETE FROM media WHERE id = ?", (media_id,))
+    return row
+
+
+def insert_media_report(
+    *,
+    media_id: int,
+    reporter_id: int | None,
+    reason: str | None,
+) -> int:
+    with connect() as conn:
+        cur = conn.execute(
+            "INSERT INTO media_reports (media_id, reporter_id, reason, status) "
+            "VALUES (?, ?, ?, 'pending')",
+            (media_id, reporter_id, (reason or "").strip() or None),
+        )
+        if cur.lastrowid is None:
+            raise RuntimeError("media_reports insert 실패")
+        return int(cur.lastrowid)
+
+
+def list_media_reports(*, status: str | None = None) -> list[sqlite3.Row]:
+    conn = get_connection()
+    try:
+        if status:
+            return list(
+                conn.execute(
+                    "SELECT * FROM media_reports WHERE status = ? ORDER BY id DESC",
+                    (status,),
+                )
+            )
+        return list(conn.execute("SELECT * FROM media_reports ORDER BY id DESC"))
+    finally:
+        conn.close()
+
+
+def get_media_report_by_id(report_id: int) -> sqlite3.Row | None:
+    conn = get_connection()
+    try:
+        return conn.execute(
+            "SELECT * FROM media_reports WHERE id = ?", (report_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+
+def resolve_media_report(
+    *,
+    report_id: int,
+    reviewer_id: int,
+    status: str,
+    notes: str | None,
+) -> bool:
+    if status not in ("reviewed", "dismissed"):
+        raise ValueError("status 는 reviewed 또는 dismissed")
+    with connect() as conn:
+        cur = conn.execute(
+            "UPDATE media_reports SET status = ?, reviewed_by = ?, "
+            "reviewed_at = CURRENT_TIMESTAMP, notes = ? "
+            "WHERE id = ? AND status = 'pending'",
+            (status, reviewer_id, (notes or "").strip() or None, report_id),
+        )
+        return (cur.rowcount or 0) > 0
+
+
+def get_media_by_hash(file_hash: str) -> sqlite3.Row | None:
+    conn = get_connection()
+    try:
+        return conn.execute(
+            "SELECT * FROM media WHERE file_hash = ?", (file_hash,)
+        ).fetchone()
+    finally:
+        conn.close()
 
 
 def update_indexed_at(media_id: int) -> None:

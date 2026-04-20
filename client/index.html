@@ -5,14 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>Gallery Search</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/auth.css">
   <meta name="gallery-api-key" content="">
 </head>
 <body>
 
 <header id="header">
-  <div style="display:flex;align-items:center;justify-content:space-between;">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
     <h1>Gallery Search</h1>
-    <span id="status-bar"></span>
+    <div id="header-actions" style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end;">
+      <span id="gallery-status"></span>
+      <span id="status-bar"></span>
+    </div>
   </div>
 
   <div class="search-grid">

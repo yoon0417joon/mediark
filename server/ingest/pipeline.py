@@ -13,9 +13,10 @@ import os
 import shutil
 import tempfile
 
-from server.config import MAX_MEDIA_DURATION, REBUILD_TAG_STATS_FULL_PIPELINE
+from server.config import DUPLICATE_POLICY, MAX_MEDIA_DURATION, REBUILD_TAG_STATS_FULL_PIPELINE
 from server.db.sqlite import (
     apply_tag_stats_delta,
+    get_media_by_hash,
     get_media_by_id,
     get_unprocessed_media,
     get_unembedded_media,
@@ -23,10 +24,12 @@ from server.db.sqlite import (
     get_indexed_media_ids,
     get_unindexed_ids_from,
     reset_indexed_at,
+    update_file_hash,
     update_media_atomic,
     update_indexed_at,
     update_index_error,
 )
+from server.ingest.hashing import compute_sha256
 
 from server.ingest.ocr import run_ocr_on_image, run_ocr_on_frames
 from server.ingest.tagger import tag_image, tag_frames
@@ -61,6 +64,24 @@ def _process_media(media_id: int, filepath: str, media_type: str) -> dict:
             raise FileNotFoundError(f"파일 없음: {filepath}")
         if os.path.getsize(filepath) == 0:
             raise ValueError(f"빈 파일 (0 bytes): {filepath}")
+
+        # ── 해시 기반 중복 감지 (Sprint 14A) ──────────────────────────────────
+        file_hash = compute_sha256(filepath)
+        existing = get_media_by_hash(file_hash)
+        if existing is not None and int(existing["id"]) != media_id:
+            if DUPLICATE_POLICY != "warn_only":
+                logger.info(
+                    "[pipeline] 중복 파일 감지, 인제스천 스킵 (id=%s, 기존 id=%s): %s",
+                    media_id, existing["id"], filepath,
+                )
+                result["error"] = f"duplicate_of:{existing['id']}"
+                return result
+            else:
+                logger.warning(
+                    "[pipeline] 중복 파일 경고 (id=%s, 기존 id=%s): %s",
+                    media_id, existing["id"], filepath,
+                )
+        update_file_hash(media_id, file_hash)
 
         # H4: 증분 tag_stats 반영을 위해 기존 태그 스냅샷
         prev_row = get_media_by_id(media_id)

@@ -32,3 +32,9 @@ def rate_limit_bucket(ip: str, bucket: str, limit: int) -> None:
         if len(dq) >= limit:
             raise HTTPException(status_code=429, detail="요청 빈도 초과")
         dq.append(now)
+
+
+def clear_rate_limits_for_tests() -> None:
+    """unittest 등에서 IP×버킷 상태를 초기화할 때만 사용."""
+    with _rate_lock:
+        _rate_hits.clear()

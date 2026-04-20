@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 · Gallery Search</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/auth.css">
+</head>
+<body>
+  <div class="admin-wrap admin-wrap-wide">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h1>관리자</h1>
+      <div>
+        <a href="/" class="user-link">← 갤러리</a>
+        <button id="btn-logout" class="user-link" type="button">로그아웃</button>
+      </div>
+    </div>
+
+    <section class="admin-section" id="sec-registration">
+      <h2>공개 가입</h2>
+      <p class="admin-hint">초대 코드 없이 회원가입을 허용할지 설정합니다. 저장 시 서버 DB에 기록되며, 항목을 저장하기 전에는 <code>.env</code>의 <code>OPEN_REGISTRATION</code> 값이 적용됩니다.</p>
+      <form class="admin-form admin-form-block" id="reg-settings-form">
+        <label class="admin-check">
+          <input type="checkbox" id="reg-open" />
+          <span>초대 코드 없이 가입 허용 (OPEN_REGISTRATION)</span>
+        </label>
+        <label>가입 시 역할
+          <select id="reg-role">
+            <option value="viewer">viewer</option>
+            <option value="uploader">uploader</option>
+          </select>
+        </label>
+        <button type="submit" class="btn btn-primary">설정 저장</button>
+        <span id="reg-settings-msg" class="auth-msg"></span>
+      </form>
+      <p id="reg-env-hint" class="admin-meta"></p>
+    </section>
+
+    <section class="admin-section" id="sec-anon">
+      <h2>익명 접근</h2>
+      <p class="admin-hint">로그인하지 않은 방문자에게 부여할 기본 역할을 설정합니다. <code>none</code>이면 JWT 없는 요청이 차단됩니다. <code>viewer</code>는 검색·열람만, <code>uploader</code>는 업로드도 허용합니다.</p>
+      <form class="admin-form admin-form-block" id="anon-access-form">
+        <label>익명 기본 역할
+          <select id="anon-role">
+            <option value="none">none (차단, 기본)</option>
+            <option value="viewer">viewer (검색·열람)</option>
+            <option value="uploader">uploader (업로드 포함)</option>
+          </select>
+        </label>
+        <button type="submit" class="btn btn-primary">설정 저장</button>
+        <span id="anon-access-msg" class="auth-msg"></span>
+      </form>
+    </section>
+
+    <section class="admin-section" id="sec-invite">
+      <h2>초대 코드</h2>
+      <form class="admin-form" id="invite-form">
+        <label>역할
+          <select id="invite-role">
+            <option value="viewer">viewer</option>
+            <option value="uploader">uploader</option>
+          </select>
+        </label>
+        <label>사용 한도 (max_uses)
+          <select id="invite-max-mode" title="초대 코드당 최대 사용 횟수">
+            <option value="1">1회 (단일)</option>
+            <option value="n">여러 회 (숫자 지정)</option>
+            <option value="inf">무제한</option>
+          </select>
+        </label>
+        <label id="invite-max-n-wrap" class="invite-max-n-wrap" hidden>횟수
+          <input type="number" id="invite-max-n" min="2" max="999999" value="5" />
+        </label>
+        <button type="submit" class="btn btn-primary">생성</button>
+        <span id="invite-msg" class="auth-msg"></span>
+      </form>
+
+      <table id="invite-table">
+        <thead>
+          <tr><th>코드</th><th>역할</th><th>한도</th><th>상태</th><th>생성자</th><th>사용자</th><th>작업</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="admin-section" id="sec-users">
+      <h2>사용자 및 Moderator 권한</h2>
+      <p class="admin-hint">이메일로 검색 · 한 페이지당 20명 · 행을 선택해 권한·역할을 변경합니다.</p>
+
+      <div class="user-toolbar">
+        <label class="user-search-label">
+          <span class="sr-only">이메일 검색</span>
+          <input type="search" id="user-search" placeholder="이메일 검색…" autocomplete="off">
+        </label>
+        <button type="button" class="btn btn-primary" id="user-search-btn">검색</button>
+      </div>
+
+      <p id="user-list-meta" class="admin-meta"></p>
+
+      <div class="table-scroll">
+        <table class="user-table" id="user-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>이메일</th>
+              <th>역할</th>
+              <th>활성</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="user-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="user-pagination" id="user-pagination"></div>
+
+      <div id="mod-detail" class="mod-detail" style="display:none;">
+        <h3 id="mod-detail-heading">선택한 사용자</h3>
+        <p id="mod-user-line" class="mod-user-line"></p>
+
+        <div class="mod-account-actions" id="mod-account-actions">
+          <h4 class="mod-subh">계정</h4>
+          <p class="admin-hint">탈퇴(비활성) 처리 시 해당 계정으로 로그인할 수 없으며 JWT가 즉시 무효화됩니다.</p>
+          <button type="button" class="btn btn-danger" id="btn-deactivate-user" hidden>탈퇴(비활성화)</button>
+        </div>
+
+        <div id="mod-perm-section">
+          <h4 class="mod-subh">Moderator 권한</h4>
+          <p class="admin-hint mod-perm-hint" id="mod-perm-hint"></p>
+          <div id="mod-perm-groups"></div>
+          <button type="button" class="btn btn-primary" id="btn-save-perms">권한 저장</button>
+        </div>
+
+        <div class="role-actions" id="role-actions">
+          <h4 class="mod-subh">역할 변경</h4>
+          <p class="admin-hint">마지막 남은 admin 은 강등할 수 없습니다. 실수로 admin 이 없어지면 서버 재기동 시 <code>BOOTSTRAP_ADMIN_EMAIL</code> 계정이 복구됩니다.</p>
+          <div class="role-btn-row" id="role-btn-row"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/admin.js" defer></script>
+</body>
+</html>

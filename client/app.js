@@ -3,13 +3,45 @@
 // ── Config ────────────────────────────────────────────────────
 const VIDEO_DEFAULT_VOLUME = 0.5; // 0.0 ~ 1.0
 
-/** API_KEY 배포 시: 브라우저는 기본으로 키를 보내지 않음 — meta 또는 localStorage (HIGH-2) */
-function apiKeyHeaders() {
+/** Sprint 15: HttpOnly 세션 쿠키(동일 출처 자동 전송) + 레거시 Bearer + API_KEY */
+function authHeaders() {
+  const h = {};
+  const jwt = localStorage.getItem('GALLERY_JWT') || '';
+  if (jwt) h['Authorization'] = 'Bearer ' + jwt;
   const meta = document.querySelector('meta[name="gallery-api-key"]');
   const fromMeta = meta && meta.getAttribute('content');
-  const k = (fromMeta && fromMeta.trim()) || (typeof localStorage !== 'undefined' && localStorage.getItem('GALLERY_API_KEY')) || '';
-  if (!k) return {};
-  return { 'X-API-Key': k };
+  const k = (fromMeta && fromMeta.trim()) || localStorage.getItem('GALLERY_API_KEY') || '';
+  if (k) h['X-API-Key'] = k;
+  return h;
+}
+const apiKeyHeaders = authHeaders;
+
+function fetchOpts(extra) {
+  return Object.assign({ credentials: 'include' }, extra || {});
+}
+
+function currentUser() {
+  try { return JSON.parse(localStorage.getItem('GALLERY_USER') || 'null'); }
+  catch (_) { return null; }
+}
+
+function logoutAndRedirect() {
+  fetch('/auth/logout', fetchOpts({ method: 'POST', headers: { ...authHeaders() } }))
+    .catch(() => {});
+  localStorage.removeItem('GALLERY_JWT');
+  localStorage.removeItem('GALLERY_USER');
+  location.replace('/login.html');
+}
+
+async function ensureSession() {
+  const res = await fetch('/auth/whoami', fetchOpts({ headers: { ...authHeaders() } }));
+  const data = await res.json().catch(() => ({}));
+  if (!data.authenticated) return false;
+  localStorage.setItem(
+    'GALLERY_USER',
+    JSON.stringify({ id: data.id, email: data.email, role: data.role })
+  );
+  return true;
 }
 
 // ── DOM refs ──────────────────────────────────────────────────
@@ -22,7 +54,8 @@ const ddRam     = document.getElementById('dd-ram');
 const btnSearch  = document.getElementById('btn-search');
 const btnShuffle = document.getElementById('btn-shuffle');
 const btnClear   = document.getElementById('btn-clear');
-const statusBar = document.getElementById('status-bar');
+/** 검색/랜덤 결과 요약(개수·시간) — status-bar 와 분리해 사용자 스트립을 덮어쓰지 않음 */
+const galleryStatusEl = document.getElementById('gallery-status');
 const gridEl    = document.getElementById('grid');
 const loaderEl  = document.getElementById('loader');
 const emptyEl   = document.getElementById('empty');
@@ -106,11 +139,19 @@ function gotoPage(p) {
   doSearch(p);
 }
 
-function setStatus(text) { statusBar.textContent = text; }
+function setStatus(text) {
+  if (galleryStatusEl) galleryStatusEl.textContent = text;
+}
 
 // ── API ───────────────────────────────────────────────────────
 async function apiFetch(url) {
-  const res = await fetch(url, { headers: { ...apiKeyHeaders() } });
+  const res = await fetch(url, fetchOpts({ headers: { ...authHeaders() } }));
+  if (res.status === 401) {
+    localStorage.removeItem('GALLERY_JWT');
+    localStorage.removeItem('GALLERY_USER');
+    location.replace('/login.html');
+    throw new Error('인증이 만료되었습니다');
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || res.statusText);
@@ -389,8 +430,10 @@ function uploadSingleFile(file, onProgress) {
     form.append('file', file);
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/upload');
-    const ak = apiKeyHeaders()['X-API-Key'];
-    if (ak) xhr.setRequestHeader('X-API-Key', ak);
+    xhr.withCredentials = true;
+    const h = authHeaders();
+    if (h['Authorization']) xhr.setRequestHeader('Authorization', h['Authorization']);
+    if (h['X-API-Key'])     xhr.setRequestHeader('X-API-Key', h['X-API-Key']);
     if (onProgress) {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) onProgress(e.loaded / e.total);
@@ -419,7 +462,7 @@ function pollUploadStatus(mediaId, timeoutMs) {
         return;
       }
       try {
-        const r = await fetch('/upload/status/' + mediaId, { headers: { ...apiKeyHeaders() } });
+        const r = await fetch('/upload/status/' + mediaId, fetchOpts({ headers: { ...apiKeyHeaders() } }));
         if (r.ok) {
           const j = await r.json();
           if (j.state === 'indexed' || j.state === 'error') {
@@ -599,5 +642,50 @@ document.querySelectorAll('.filter-pill').forEach(pill => {
   });
 });
 
+// ── User strip + logout (Sprint 15) ───────────────────────────
+function renderUserStrip() {
+  const u = currentUser();
+  if (!u) return;
+  const bar = document.getElementById('status-bar');
+  if (!bar || bar.dataset.userWired) return;
+  bar.dataset.userWired = '1';
+
+  const who = document.createElement('span');
+  who.className = 'user-who';
+  who.textContent = u.email + ' · ' + u.role;
+  bar.appendChild(who);
+
+  if (u.role === 'admin') {
+    const a = document.createElement('a');
+    a.href = '/admin.html';
+    a.textContent = '관리';
+    a.className = 'user-link';
+    bar.appendChild(a);
+  }
+
+  const out = document.createElement('button');
+  out.className = 'user-link';
+  out.textContent = '로그아웃';
+  out.addEventListener('click', logoutAndRedirect);
+  bar.appendChild(out);
+}
+
+// Uploader 이상이 아니면 업로드 버튼 숨김
+function gateUploadButton() {
+  const u = currentUser();
+  const btn = document.getElementById('btn-upload');
+  if (!btn) return;
+  const level = { viewer: 0, uploader: 1, moderator: 2, admin: 3 };
+  if (!u || (level[u.role] ?? 0) < 1) btn.style.display = 'none';
+}
+
 // ── Init ──────────────────────────────────────────────────────
-loadRandom();
+(async function boot() {
+  if (!(await ensureSession())) {
+    location.replace('/login.html');
+    return;
+  }
+  renderUserStrip();
+  gateUploadButton();
+  loadRandom();
+})();

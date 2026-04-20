@@ -1,7 +1,11 @@
 # ── 공통 의존성 (모든 OS) ────────────────────────────────────
 fastapi>=0.110.0
+python-dotenv>=1.0.0
 python-multipart>=0.0.9
 uvicorn[standard]>=0.29.0
+# 인증 (Sprint 15)
+PyJWT>=2.8.0
+bcrypt>=4.1.0
 qdrant-client>=1.9.0
 transformers>=4.40.0
 accelerate>=0.30.0

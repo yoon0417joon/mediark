@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mediark Hub</title>
+  <link rel="stylesheet" href="hub.css" />
+</head>
+<body>
+  <div class="hub-wrapper">
+    <header class="hub-header">
+      <h1 class="hub-title">Mediark Hub</h1>
+      <p class="hub-subtitle">여러 갤러리 서버를 한 곳에서 관리하세요</p>
+    </header>
+
+    <section class="hub-add-section">
+      <form id="add-server-form" class="hub-add-form">
+        <input
+          type="url"
+          id="server-url-input"
+          class="hub-url-input"
+          placeholder="http://your-gallery-server:8000"
+          required
+          autocomplete="off"
+        />
+        <button type="submit" class="btn btn-primary" id="add-btn">서버 추가</button>
+      </form>
+      <p id="add-msg" class="msg"></p>
+    </section>
+
+    <section class="hub-grid-section">
+      <div id="server-grid" class="hub-grid">
+        <p id="empty-hint" class="hub-empty">추가된 갤러리가 없습니다. 위에 서버 URL을 입력해 추가하세요.</p>
+      </div>
+    </section>
+  </div>
+
+  <template id="card-template">
+    <div class="hub-card" data-id="">
+      <div class="hub-card-icon">
+        <img class="hub-card-img" src="" alt="" />
+        <span class="hub-card-initials"></span>
+      </div>
+      <div class="hub-card-body">
+        <div class="hub-card-name"></div>
+        <div class="hub-card-url"></div>
+        <div class="hub-card-desc"></div>
+      </div>
+      <div class="hub-card-footer">
+        <span class="hub-status-badge"></span>
+        <div class="hub-card-actions">
+          <button class="btn btn-sm btn-primary btn-open">접속</button>
+          <button class="btn btn-sm btn-ghost btn-refresh" title="새로고침">↺</button>
+          <button class="btn btn-sm btn-danger btn-remove" title="삭제">×</button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <script src="hub.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>로그인 · Gallery Search</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/auth.css">
+</head>
+<body class="auth-body">
+  <form id="login-form" class="auth-card" novalidate>
+    <h1>Gallery Search</h1>
+    <h2>로그인</h2>
+
+    <label>이메일
+      <input type="email" id="email" autocomplete="username" required>
+    </label>
+    <label>비밀번호
+      <input type="password" id="password" autocomplete="current-password" required>
+    </label>
+
+    <button type="submit" class="btn btn-primary" id="submit">로그인</button>
+
+    <p class="auth-msg" id="msg" role="alert"></p>
+    <p class="auth-alt">계정이 없으신가요? <a href="/register.html">초대 코드로 가입</a></p>
+  </form>
+
+  <script src="/login.js" defer></script>
+</body>
+</html>

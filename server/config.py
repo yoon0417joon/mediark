@@ -1,6 +1,15 @@
 import logging
 import os
 import platform
+from pathlib import Path
+
+# uvicorn 단독 실행 시에도 프로젝트 루트 `.env` 가 os.environ 에 반영되도록 한다.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass
 
 _log = logging.getLogger(__name__)
 
@@ -47,6 +56,12 @@ PORT              = _int_env("PORT", 8000)
 
 API_KEY           = os.environ.get("API_KEY", "").strip()
 
+# 브라우저 <img> 는 Authorization 을 보낼 수 없음 — HttpOnly 세션 쿠키 권장.
+# 1 이면 GET /thumb/*, /media/* 를 토큰 없이 공개(레거시). 기본 0.
+PUBLIC_MEDIA_GET: bool = os.environ.get(
+    "PUBLIC_MEDIA_GET", "0"
+).strip().lower() in ("1", "true", "yes", "on")
+
 _default_origins  = "http://localhost,http://127.0.0.1,http://localhost:8000,http://127.0.0.1:8000"
 ALLOWED_ORIGINS   = [
     o.strip() for o in os.environ.get("ALLOWED_ORIGINS", _default_origins).split(",")
@@ -55,8 +70,8 @@ ALLOWED_ORIGINS   = [
 
 MAX_UPLOAD_BYTES  = _int_env("MAX_UPLOAD_BYTES", 500 * 1024 * 1024)
 MAX_QUERY_LEN     = _int_env("MAX_QUERY_LEN", 256)
-SEARCH_RATE_LIMIT = _int_env("SEARCH_RATE_LIMIT", 30)
-UPLOAD_RATE_LIMIT = _int_env("UPLOAD_RATE_LIMIT", 60)
+SEARCH_RATE_LIMIT = _int_env("SEARCH_RATE_LIMIT", 90)
+UPLOAD_RATE_LIMIT = _int_env("UPLOAD_RATE_LIMIT", 120)
 
 QDRANT_URL        = os.environ.get("QDRANT_URL", "").strip()
 QDRANT_API_KEY    = os.environ.get("QDRANT_API_KEY", "").strip() or None
@@ -107,3 +122,51 @@ REBUILD_TAG_STATS_FULL_PIPELINE = os.environ.get(
 
 # 레이트리밋 IP×버킷 맵 상한 (MEDIUM-6)
 RATE_LIMIT_MAX_KEYS = _int_env("RATE_LIMIT_MAX_KEYS", 5000)
+
+# 미들웨어 전역 레이트리밋: 분당 IP당 요청 수(/thumb, /media 는 제외)
+GLOBAL_RATE_LIMIT = _int_env("GLOBAL_RATE_LIMIT", 2000)
+
+# 중복 파일 감지 정책 (Sprint 14A)
+# reject_only   : 409 반환, 기존 파일 유지 (기본)
+# auto_delete_new: 업로드 파일 버리고 기존 파일 유지 (성공 응답, duplicate=true)
+# warn_only     : 경고만 반환, 업로드 진행
+DUPLICATE_POLICY: str = os.environ.get("DUPLICATE_POLICY", "reject_only").strip()
+
+# ── 인증 (Sprint 15) ─────────────────────────────────────────
+# JWT_SECRET: HMAC 서명 키. 미설정 시 프로세스 기동마다 랜덤 생성(= 재시작 시 모든 토큰 무효).
+#             운영 환경에서는 반드시 고정 값을 설정.
+JWT_SECRET: str = os.environ.get("JWT_SECRET", "").strip()
+JWT_ALGORITHM: str = os.environ.get("JWT_ALGORITHM", "HS256").strip() or "HS256"
+JWT_TTL_MINUTES: int = _int_env("JWT_TTL_MINUTES", 60 * 24)  # 24시간
+
+# HttpOnly 세션 쿠키(로그인 시 JWT 저장) — <img>/fetch 가 동일 출처에서 쿠키 전송
+SESSION_COOKIE_NAME: str = (
+    os.environ.get("SESSION_COOKIE_NAME", "gallery_session").strip() or "gallery_session"
+)
+SESSION_COOKIE_SECURE: bool = os.environ.get(
+    "SESSION_COOKIE_SECURE", "0"
+).strip().lower() in ("1", "true", "yes", "on")
+_ss = os.environ.get("SESSION_COOKIE_SAMESITE", "lax").strip().lower()
+SESSION_COOKIE_SAMESITE: str = _ss if _ss in ("lax", "strict", "none") else "lax"
+
+# 초기 admin 부트스트랩. 둘 다 설정돼 있으면 첫 실행 시 admin 계정을 자동 생성.
+BOOTSTRAP_ADMIN_EMAIL: str = os.environ.get("BOOTSTRAP_ADMIN_EMAIL", "").strip()
+# .env 한 줄 끝 공백 제거. (의도적 후행 공백 비밀번호는 지원하지 않음)
+BOOTSTRAP_ADMIN_PASSWORD: str = os.environ.get("BOOTSTRAP_ADMIN_PASSWORD", "").strip()
+
+# 로그인·가입 레이트리밋(분당 IP당 시도 횟수)
+LOGIN_RATE_LIMIT: int = _int_env("LOGIN_RATE_LIMIT", 30)
+
+# 1 이면 초대 코드 없이 회원가입 허용(기본 역할은 OPEN_REGISTRATION_ROLE). 업로드 등은 여전히 로그인 필요.
+OPEN_REGISTRATION: bool = os.environ.get(
+    "OPEN_REGISTRATION", "0"
+).strip().lower() in ("1", "true", "yes", "on")
+OPEN_REGISTRATION_ROLE: str = (
+    os.environ.get("OPEN_REGISTRATION_ROLE", "viewer").strip() or "viewer"
+)
+
+# JWT 없이 접근하는 익명 사용자에게 부여할 기본 역할.
+# "none" = 익명 접근 차단 (기본), "viewer" = 검색/열람 허용, "uploader" = 업로드도 허용.
+DEFAULT_ANON_ROLE: str = (
+    os.environ.get("DEFAULT_ANON_ROLE", "none").strip().lower() or "none"
+)

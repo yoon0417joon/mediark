@@ -1,4 +1,4 @@
-"""FastAPI 앱 진입점 — Sprint 13.
+"""FastAPI 앱 진입점 — Sprint 13 / 15B / 15C.
 
 엔드포인트:
   GET  /search              — 소스별 벡터 검색 + 재순위 (ocr_q/wd14_q/ram_q/stt_q)
@@ -26,6 +26,7 @@ from typing import Literal, Optional
 
 from fastapi import (
     BackgroundTasks,
+    Depends,
     FastAPI,
     HTTPException,
     Query,
@@ -41,16 +42,25 @@ from server.config import (
     ALLOWED_ORIGINS,
     API_KEY,
     GALLERY_ROOT,
+    GLOBAL_RATE_LIMIT,
     HOST,
     MAX_QUERY_LEN,
     PORT,
+    PUBLIC_MEDIA_GET,
     QDRANT_URL,
     SEARCH_RATE_LIMIT,
     THUMB_DIR,
 )
+from server.auth.deps import (
+    current_user,
+    is_request_authenticated_jwt,
+    require_permission,
+    user_may_view_hidden_media,
+)
 from server.db.sqlite import (
     get_connection,
     get_media_by_id,
+    is_media_hidden,
     get_random_media,
     init_db,
     rebuild_tag_stats,
@@ -59,6 +69,9 @@ from server.db.sqlite import (
 from server.http_utils import client_ip
 from server.ingest.watcher import GalleryWatcher
 from server.rate_limit import rate_limit_bucket
+from server.routes_admin import router as admin_router
+from server.routes_auth import router as auth_router
+from server.routes_moderation import router as moderation_router
 from server.routes_upload import router as upload_router
 from server.search.query import search as _search
 from server import upload_tracking
@@ -72,6 +85,12 @@ async def lifespan(app: FastAPI):
     """DB/모델/Qdrant warmup, tag_stats rebuild, watchdog 시작 → 종료 시 정리."""
     global _watcher
     init_db()
+
+    # Sprint 15 — 인증 스키마 + 부트스트랩 admin
+    from server.auth.schema import init_auth_schema
+    from server.auth.bootstrap import ensure_bootstrap_admin
+    init_auth_schema()
+    ensure_bootstrap_admin()
 
     # 임베딩 모델 사전 로드 — 첫 쿼리 지연 방지. 실패 시 서버 기동 중단 (H16).
     from server.search.embed import get_embedding
@@ -156,7 +175,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS if not _cors_wildcard else ["*"],
     allow_credentials=not _cors_wildcard,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    # PUT/DELETE/PATCH — 관리자·모더레이션 API 및 CORS 프리플라이트
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
     allow_headers=["Authorization", "Content-Type", "X-API-Key"],
 )
 
@@ -164,12 +184,29 @@ app.add_middleware(
 # API_KEY 환경변수 가 비어있으면 loopback(127.0.0.1/::1) 에서만 요청 허용.
 # 설정되어 있으면 X-API-Key 또는 Authorization: Bearer <key> 헤더 필수.
 
-_PUBLIC_PATHS = {"/healthz"}
+_PUBLIC_PATHS = {
+    "/healthz",
+    "/profile/public",  # Sprint 15C — 허브 사이트용 공개 서버 프로필
+    # Sprint 15 — 로그인/회원가입/로그인 상태 확인은 API_KEY/loopback 제약 없이 공개.
+    "/auth/login",
+    "/auth/register",
+    "/auth/registration-options",
+    "/auth/whoami",
+    "/login",
+    "/login.html",
+    "/login.js",
+    "/register.html",
+    "/register.js",
+    "/auth.css",
+}
 if not API_KEY:
     # 키 미설정(로컬 전용)일 때만 API 문서 무인증 공개
     _PUBLIC_PATHS |= {"/docs", "/openapi.json", "/redoc"}
 _STATIC_PREFIXES = ("/static/",)
-_CLIENT_ASSETS = {"/", "/index.html", "/style.css", "/app.js", "/favicon.ico"}
+_CLIENT_ASSETS = {
+    "/", "/index.html", "/style.css", "/app.js", "/favicon.ico",
+    "/admin.html", "/admin.js",
+}
 
 
 def _is_loopback(ip: str) -> bool:
@@ -187,11 +224,30 @@ def _check_api_key(request: Request) -> None:
     if any(path.startswith(p) for p in _STATIC_PREFIXES):
         return
     # 클라이언트 번들 파일 (확장자 기반) 통과
-    if path.endswith((".js", ".css", ".map", ".ico", ".png", ".svg", ".woff", ".woff2")):
+    if path.endswith((".html", ".js", ".css", ".map", ".ico", ".png", ".svg", ".woff", ".woff2")):
+        return
+
+    # <img src="/thumb/…"> 는 Bearer 를 붙일 수 없음 — 외부 접속 시 썸네일·원본 GET 만 선택적 공개
+    if PUBLIC_MEDIA_GET and request.method == "GET":
+        if path.startswith("/thumb/") or path.startswith("/media/"):
+            return
+
+    provided_key = request.headers.get("x-api-key", "")
+    bearer = ""
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        bearer = auth[7:].strip()
+
+    # JWT: Authorization Bearer 또는 HttpOnly 세션 쿠키 (Sprint 15 + 쿠키 세션)
+    if is_request_authenticated_jwt(request):
         return
 
     if not API_KEY:
-        # 키 미설정: 원격 접근 차단 (loopback 만 허용)
+        # 익명 접근 허용 설정이면 pass-through (엔드포인트 레벨 역할 체크로 위임)
+        from server.auth.anon_access import get_effective_anon_role
+        if get_effective_anon_role() != "none":
+            return
+        # 키 미설정 + JWT 없음 + 익명 차단: 원격 접근 차단 (loopback 만 허용)
         ip = client_ip(request)
         if not _is_loopback(ip):
             raise HTTPException(
@@ -200,24 +256,31 @@ def _check_api_key(request: Request) -> None:
             )
         return
 
-    provided = request.headers.get("x-api-key", "")
-    if not provided:
-        auth = request.headers.get("authorization", "")
-        if auth.lower().startswith("bearer "):
-            provided = auth[7:].strip()
+    # X-API-Key 일치
+    if provided_key and hmac.compare_digest(provided_key, API_KEY):
+        return
+    # Bearer 가 API_KEY 와 일치 (구버전 호환)
+    if bearer and hmac.compare_digest(bearer, API_KEY):
+        return
 
-    if not provided or not hmac.compare_digest(provided, API_KEY):
-        raise HTTPException(status_code=401, detail="유효하지 않은 API 키")
+    raise HTTPException(status_code=401, detail="인증이 필요합니다")
+
+
+def _counts_toward_global_rate_limit(path: str) -> bool:
+    """썸네일·원본 파일 요청은 그리드에서 연속으로 많이 나가므로 전역 한도에서 제외."""
+    if path.startswith("/thumb/") or path.startswith("/media/"):
+        return False
+    return True
 
 
 class AuthRateLimitMiddleware(BaseHTTPMiddleware):
-    """인증 체크 + 기본 레이트리밋(IP 당 300 req/min 상한)."""
+    """인증 체크 + 전역 레이트리밋(IP 당 분당 GLOBAL_RATE_LIMIT, /thumb·/media 제외)."""
 
     async def dispatch(self, request: Request, call_next):
         try:
             _check_api_key(request)
-            if request.method != "OPTIONS":
-                rate_limit_bucket(client_ip(request), "global", 300)
+            if request.method != "OPTIONS" and _counts_toward_global_rate_limit(request.url.path):
+                rate_limit_bucket(client_ip(request), "global", GLOBAL_RATE_LIMIT)
         except HTTPException as e:
             return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
         return await call_next(request)
@@ -225,12 +288,23 @@ class AuthRateLimitMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(AuthRateLimitMiddleware)
 
+app.include_router(auth_router)
+app.include_router(admin_router)
+app.include_router(moderation_router)
 app.include_router(upload_router)
 
 
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
+
+
+@app.get("/profile/public")
+async def public_profile():
+    """허브 사이트용 — 로그인 없이 서버 이름·설명·아이콘을 반환한다."""
+    from server.auth.server_profile import get_server_profile
+    profile = await run_in_threadpool(get_server_profile)
+    return {**profile, "version": app.version}
 
 # ── 인제스천 상태 (프로세스 내 공유 상태) — H1: 락 추가 ──────────────────────
 
@@ -341,10 +415,15 @@ async def tags_suggest_endpoint(
 # ── 파일 서빙 ─────────────────────────────────────────────────────────────────
 
 @app.get("/info/{media_id}")
-async def media_info(media_id: int):
+async def media_info(
+    media_id: int,
+    user: dict | None = Depends(current_user),
+):
     """미디어 메타데이터(OCR, 태그, RAM 태그)를 JSON으로 반환한다."""
     row = await run_in_threadpool(lambda: get_media_by_id(media_id))
     if row is None:
+        raise HTTPException(status_code=404, detail="미디어를 찾을 수 없습니다")
+    if is_media_hidden(media_id) and not user_may_view_hidden_media(user):
         raise HTTPException(status_code=404, detail="미디어를 찾을 수 없습니다")
     return {
         "id":         row["id"],
@@ -378,7 +457,10 @@ _THUMB_CACHE_HEADERS = {
 
 
 @app.get("/media/{media_id}")
-async def serve_media(media_id: int):
+async def serve_media(
+    media_id: int,
+    user: dict | None = Depends(current_user),
+):
     """원본 미디어 파일을 반환한다. GALLERY_ROOT 하위만 서빙.
 
     H19: 영상 스트리밍을 위해 Accept-Ranges + Cache-Control 헤더를 명시.
@@ -387,15 +469,22 @@ async def serve_media(media_id: int):
     row = await run_in_threadpool(lambda: get_media_by_id(media_id))
     if row is None:
         raise HTTPException(status_code=404, detail="미디어를 찾을 수 없습니다")
+    if is_media_hidden(media_id) and not user_may_view_hidden_media(user):
+        raise HTTPException(status_code=404, detail="미디어를 찾을 수 없습니다")
     resolved = _ensure_under(row["filepath"], GALLERY_ROOT)
     return FileResponse(str(resolved), headers=_MEDIA_CACHE_HEADERS)
 
 
 @app.get("/thumb/{media_id}")
-async def serve_thumb(media_id: int):
+async def serve_thumb(
+    media_id: int,
+    user: dict | None = Depends(current_user),
+):
     """썸네일 이미지를 반환한다. THUMB_DIR 하위만 서빙."""
     row = await run_in_threadpool(lambda: get_media_by_id(media_id))
     if row is None:
+        raise HTTPException(status_code=404, detail="미디어를 찾을 수 없습니다")
+    if is_media_hidden(media_id) and not user_may_view_hidden_media(user):
         raise HTTPException(status_code=404, detail="미디어를 찾을 수 없습니다")
     thumb_path = row["thumb_path"]
     if not thumb_path:
@@ -432,8 +521,14 @@ def _run_ingest() -> None:
             _ingest_state["finished_at"] = datetime.now(timezone.utc).isoformat()
 
 
+_ingest_permission = require_permission("ingest_trigger")
+
+
 @app.post("/ingest", status_code=202)
-async def trigger_ingest(background_tasks: BackgroundTasks):
+async def trigger_ingest(
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(_ingest_permission),
+):
     """수동 인제스천을 시작한다. 즉시 202를 반환하고 백그라운드에서 실행된다."""
     # H1: 락으로 감싼 compare-and-set — 동시 요청 race 차단.
     with _ingest_lock:

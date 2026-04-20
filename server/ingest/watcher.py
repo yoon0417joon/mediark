@@ -160,18 +160,47 @@ def _process_single_file(
             logger.warning("[watcher] 길이 확인 실패 (%s): %s", filepath, e)
             return
 
-    from server.db.sqlite import get_media_by_filepath, insert_media
+    from server.db.sqlite import get_media_by_filepath, get_media_by_hash, insert_media
 
-    media_id = insert_media(filepath, media_type)
+    # filepath 이미 DB에 있으면 insert 전에 처리
+    existing_row = get_media_by_filepath(filepath)
+    if existing_row is not None:
+        if existing_row["indexed_at"] is not None:
+            return
+        media_id = existing_row["id"]
+    else:
+        # ── 해시 기반 중복 감지 (Sprint 14A) — insert 전에 수행해 zombie 방지 ──
+        try:
+            from server.ingest.hashing import compute_sha256
+            from server.config import DUPLICATE_POLICY
 
-    if media_id is None:
-        row = get_media_by_filepath(filepath)
-        if row is None:
-            logger.warning("[watcher] DB 조회 실패, 스킵: %s", filepath)
-            return
-        if row["indexed_at"] is not None:
-            return
-        media_id = row["id"]
+            file_hash = compute_sha256(filepath)
+            dup = get_media_by_hash(file_hash)
+            if dup is not None:
+                if DUPLICATE_POLICY != "warn_only":
+                    logger.info(
+                        "[watcher] 중복 파일 감지, 인제스천 스킵 (기존 id=%s): %s",
+                        dup["id"], filepath,
+                    )
+                    return
+                else:
+                    logger.warning(
+                        "[watcher] 중복 파일 경고 (기존 id=%s): %s",
+                        dup["id"], filepath,
+                    )
+        except Exception as _hash_err:
+            logger.warning("[watcher] 해시 계산 실패, 인제스천 계속 진행 (%s): %s", filepath, _hash_err)
+
+        media_id = insert_media(filepath, media_type)
+        if media_id is None:
+            # 경쟁 조건: 다른 스레드가 먼저 삽입
+            row = get_media_by_filepath(filepath)
+            if row is None:
+                logger.warning("[watcher] DB 조회 실패, 스킵: %s", filepath)
+                return
+            if row["indexed_at"] is not None:
+                return
+            media_id = row["id"]
 
     logger.info("[watcher] 신규 파일 감지 → 파이프라인 시작 (id=%s): %s", media_id, filepath)
 

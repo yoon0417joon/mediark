@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>가입 · Gallery Search</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/auth.css">
+</head>
+<body class="auth-body">
+  <form id="register-form" class="auth-card" novalidate>
+    <h1>Gallery Search</h1>
+    <h2 id="register-title">가입</h2>
+
+    <label>이메일
+      <input type="email" id="email" autocomplete="username" required>
+    </label>
+    <label>비밀번호 (8자 이상)
+      <input type="password" id="password" autocomplete="new-password" minlength="8" required>
+    </label>
+    <label id="invite-label">초대 코드 <span id="invite-hint" class="auth-optional"></span>
+      <input type="text" id="invite" autocomplete="off" required>
+    </label>
+
+    <button type="submit" class="btn btn-primary" id="submit">가입</button>
+
+    <p class="auth-msg" id="msg" role="alert"></p>
+    <p class="auth-alt">이미 계정이 있으신가요? <a href="/login.html">로그인</a></p>
+  </form>
+
+  <script src="/register.js" defer></script>
+</body>
+</html>

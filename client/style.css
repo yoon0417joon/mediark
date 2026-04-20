@@ -263,11 +263,21 @@
     #upload-log .log-err { color: #f87171; }
     #upload-log .log-skip { color: var(--text-dim); }
 
-    /* ── Status bar ─────────────────────────────────── */
-    #status-bar {
+    /* ── Gallery status + user strip (Sprint 15) ─────── */
+    #header-actions {
+      margin-left: auto;
+    }
+    #gallery-status {
       font-size: 11px;
       color: var(--text-dim);
-      margin-left: auto;
+    }
+    #status-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-dim);
     }
 
     /* ── Grid ───────────────────────────────────────── */

@@ -161,6 +161,21 @@ def get_all_point_ids() -> set[int]:
     return ids
 
 
+def delete_points_by_media_ids(media_ids: list[int]) -> None:
+    """Qdrant 에서 포인트 삭제. 컬렉션 없거나 id 비어 있으면 noop."""
+    if not media_ids:
+        return
+    if not collection_exists():
+        return
+    from qdrant_client.models import PointIdsList
+
+    client = get_client()
+    client.delete(
+        collection_name=QDRANT_COLLECTION,
+        points_selector=PointIdsList(points=media_ids),
+    )
+
+
 def upsert_vectors_batch(
     items: list[tuple[int, list[float], dict]],
 ) -> None:

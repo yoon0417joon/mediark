@@ -209,6 +209,38 @@ def suggest_tags(prefix: str, source: str, limit: int = 20) -> list[dict]:
         conn.close()
 
 
+def exclude_hidden_media_ids(ids: list[int]) -> list[int]:
+    """숨김 처리된 미디어 id 를 제외한다."""
+    if not ids:
+        return []
+    conn = get_connection()
+    try:
+        ph = ",".join("?" * len(ids))
+        rows = conn.execute(
+            f"SELECT id FROM media WHERE id IN ({ph}) AND COALESCE(hidden,0) = 0",
+            ids,
+        ).fetchall()
+        return [int(r["id"]) for r in rows]
+    finally:
+        conn.close()
+
+
+def hidden_media_ids_among(ids: list[int]) -> set[int]:
+    """주어진 id 중 숨김인 것만 집합으로 반환."""
+    if not ids:
+        return set()
+    conn = get_connection()
+    try:
+        ph = ",".join("?" * len(ids))
+        rows = conn.execute(
+            f"SELECT id FROM media WHERE id IN ({ph}) AND COALESCE(hidden,0) != 0",
+            ids,
+        ).fetchall()
+        return {int(r["id"]) for r in rows}
+    finally:
+        conn.close()
+
+
 def get_random_media(limit: int = 50, media_type: str | None = None) -> list[dict]:
     """썸네일 있는 미디어를 근사 랜덤으로 반환한다.
 
@@ -219,7 +251,10 @@ def get_random_media(limit: int = 50, media_type: str | None = None) -> list[dic
 
     conn = get_connection()
     try:
-        where = "thumb_path IS NOT NULL AND thumb_path != ''"
+        where = (
+            "thumb_path IS NOT NULL AND thumb_path != '' "
+            "AND COALESCE(hidden,0) = 0"
+        )
         params: list = []
         if media_type in ("image", "gif", "video"):
             where += " AND media_type = ?"
@@ -309,6 +344,7 @@ def fts_match_ids(field: str, q: str) -> list[int] | None:
         except sqlite3.DatabaseError as e:
             logger.warning("[sqlite] FTS5 MATCH 실패 (%s) → LIKE 폴백: %s", q, e)
             return None
-        return [r["id"] for r in rows]
+        ids = [r["id"] for r in rows]
+        return exclude_hidden_media_ids(ids)
     finally:
         conn.close()
